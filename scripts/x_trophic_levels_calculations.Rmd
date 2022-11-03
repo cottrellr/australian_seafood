@@ -1,0 +1,46 @@
+---
+title: "Plotting effective trophic levels for Aus aquaculture"
+author: "Rich Cottrell"
+date: "03/11/2022"
+output: html_document
+---
+
+
+```{r}
+
+library(tidyverse)
+library(here)
+library(janitor)
+
+
+select <- dplyr::select
+
+```
+
+
+#Import Production to attach to the trophic levels
+```{r}
+
+readRDS(here("data/tidy_data/aquaculture_production_tidy.rds")) |>
+  group_by(year, species, isscaap_group) |> 
+  summarise(value = sum(value, na.rm = TRUE)) |> 
+  arrange( -year, -value) |> 
+  filter(!species %in% c("Aquatic invertebrates nei", "Southern bluefin tuna", "Abalones nei")) |> 
+  filter(!isscaap_group %in% c("Oysters", "Mussels", "Miscellaneous marine molluscs", "Miscellaneous marine crustaceans", "Crabs, sea-spiders", "Scallops, pectens"))
+  
+  
+  
+  mutate(tl_group = case_when(isscaap_group == "Salmons, trouts, smelts" ~ "Salmons",
+                              isscaap_group == "Shrimps, prawns" ~ "Shrimps",
+                              isscaap_group %in% c("Mussels", "Oysters") ~ NA,
+                              isscaap_group %in% c("Miscellaneous freshwater fishes", "Miscellaneous diadromous fishes") ~ "FW fishes",
+                              isscaap_group == "Marine fishes not identified" ~ "Marine fishes",
+                              
+                              
+                              )))
+  
+
+
+
+```
+
