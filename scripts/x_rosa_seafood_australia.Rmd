@@ -98,10 +98,10 @@ total_production <- cap_aus %>%
   drop_na() %>% 
   group_by(year) %>% 
   mutate(value = as.numeric(value)) %>% 
-  summarise(total_prod = sum(value), species, year, type, value) %>% 
+  reframe(total_prod = sum(value), species, year, type, value) %>% 
   ungroup() %>% 
   group_by(type, year) %>% 
-  summarise(y_value = sum(value), total_prod) %>% 
+  reframe(y_value = sum(value), total_prod) %>% 
   ungroup() %>% 
   unique()%>% 
   mutate(type = factor(type, levels = c("farmed", "wild-caught")))
@@ -109,7 +109,7 @@ total_production <- cap_aus %>%
 prop_production <- total_production %>% 
   filter(type == "farmed") %>% 
   group_by(year) %>% 
-  summarise(prop = (y_value/total_prod)*100, y_value, type) %>% 
+  reframe(prop = (y_value/total_prod)*100, y_value, type) %>% 
   ungroup() %>% 
   filter(year %in% (c(seq(from= 1950, to = 2017, by = 10), "2017"))) #%>%
   # mutate(prop_aqu = (100-prop))
@@ -140,7 +140,7 @@ prop_production <- total_production %>%
     theme(legend.position = c(0.25, 0.8),
           plot.title = element_text(hjust = 0.5, size = 15),
           text = element_text(size=12),
-          legend.text = element_text(size=9),
+          legend.text = element_text(size=10),
           legend.key.size = unit(0.7, "cm"))+
     labs(title = "Australian Seafood \nProduction System", y= "Seafood production (1000s tonnes, LWE)",x = "Year", fill="Source")+
     scale_y_continuous(labels = scales::comma)+
@@ -180,18 +180,18 @@ GNBlupal = c("#08589E", "#1E79B2", "#3496C3", "#4AAFD1", "#66C0CA", "#83CFC1")
 (sust_stocks <- ggplot(sust_cap, aes(x = year, y = prop*100, fill = status)) +
   geom_bar(stat = "identity") + 
     scale_fill_manual(values = GNBlupal) + 
-    guides(fill = guide_legend(title = "Sustainability status")) + 
+    #guides(fill = guide_legend(title = "Sustainability status")) + 
     theme_pubr()+
     theme(text = element_text(size=12),
           plot.title = element_text(size = 15, hjust = 0.5),
-        legend.text = element_text(size=12),
-        legend.title = element_blank(),
+        legend.text = element_text(size=10),
+        #legend.title = element_text("Sustainability status"),
         legend.position = "right",
         legend.key.width = unit(0.3, "cm"), 
         legend.key.height = unit(0.7, "cm"),
         legend.box.spacing = unit(-0.7, "cm"))+    #,
         #legend.margin = margin(c(0,0,0,0), "cm"))+
-  labs(y="Number of stocks (%)", x="Year")+
+  labs(y="Number of stocks (%)", x="Year", fill = "Sustainability status")+
   guides(colour = FALSE) + 
     ggtitle("Sustainability of Australian \n Fisheries stocks")
   )  #+ 
@@ -236,7 +236,7 @@ palette = c("#4292C6", "#9ECAE1")
     theme(legend.position = c(0.25, 0.8),
           plot.title = element_text(hjust = 0.5, size = 15),
           text = element_text(size=12),
-          legend.text = element_text(size=9),
+          legend.text = element_text(size=10),
           legend.key.size = unit(0.7, "cm"))+
     labs(title = "Aquaculture production", y= "Aquaculture production (1000s tonnes, LWE)",x = "Year", fill="Fed/unfed")+
    # scale_y_continuous(labels = scales::comma)+
@@ -277,60 +277,61 @@ aqu_aus_3 <- aqu_aus_2 %>%
 (eFCRs <-read.csv(here("data", "tidy_data", "eFCRs.csv")))
   
 aqu_prod_eFCR <- aqu_aus_3 %>%
- left_join(eFCRs, by = c("Taxa", "year" = "Year")) 
+ left_join(eFCRs, by = c("Taxa", "year" = "Year")) %>% 
+  mutate(Taxa = case_when(Taxa %in% c("Salmons", "Trouts") ~ "Salmons and trouts", 
+                          TRUE ~ Taxa))
 
 # could try to make a figure with two y axis, on the left production by taxa per year (x), and on the right FCR
 
-prod_FCR <- aqu_prod_eFCR %>% 
-  group_by(Taxa, year) %>% 
-  reframe(production = sum(value), eFCR, species, Taxa) %>% 
-  drop_na(Taxa) %>% 
-  ungroup() %>% 
-  group_by(year) %>% 
-  mutate(aveFCR = mean(eFCR)) %>% 
-  filter(! Taxa == "NA") %>% 
+prod_FCR <- aqu_prod_eFCR %>%
+  group_by(Taxa, year) %>%
+  reframe(production = sum(value), eFCR, species, Taxa) %>%
+  drop_na(Taxa) %>%
+  ungroup() %>%
+  group_by(year) %>%
+  mutate(aveFCR = mean(eFCR)) %>%
+  filter(! Taxa == "NA") %>%
   ungroup()
 
-#top eFCR 
-tp_eFCR <- prod_FCR %>% 
-  filter(year == "2015") %>% 
-  select(Taxa, eFCR) %>% 
-  unique() %>% 
-  arrange(desc(eFCR))
-# % of total production per eFCR group
-eFCR_prop <- aqu_aus %>% mutate(Taxa = case_when(grepl("Freshwater fishes", isscaap_group) ~ "FW fishes",
-                            grepl("Barramundi", species) ~ "FW fishes",
-                             grepl("salmon", species) ~ "Salmons",
-                             grepl("trout", species) ~ "Trouts",
-                             grepl("Freshwater crustaceans", isscaap_group) ~ "FW crustaceans",
-                             grepl("Marine fishes", species) ~ "Marine fishes ",
-                             grepl("Finfishes", species) ~ "Marine fishes ",
-                             grepl("marine crustaceans", species) ~ "Shrimps",
-                             grepl("Shrimps", isscaap_group) ~ "Shrimps", 
-                             grepl("eels", isscaap_group) ~ "Eels",
-                             grepl("Miscellaneous freshwater fishes", isscaap_group) ~ "FW fishes", 
-                          TRUE ~ isscaap_group)) %>% 
-  select(-c("country", "fishing_area", "isscaap_group", "species", "fishing_area_code", "environment")) %>% 
-  left_join(aqu_total_prod, by = "year") %>% 
-  group_by(year, Taxa) %>% 
-  reframe(production = sum(value), total_production) %>% 
-  mutate(prop = production*100/total_production) %>% 
-  unique()
-  
-eFCR_prop %>% filter(Taxa == "FW fishes")
+# #top eFCR 
+# tp_eFCR <- prod_FCR %>% 
+#   filter(year == "2015") %>% 
+#   select(Taxa, eFCR) %>% 
+#   unique() %>% 
+#   arrange(desc(eFCR))
+# # % of total production per eFCR group
+# eFCR_prop <- aqu_aus %>% mutate(Taxa = case_when(grepl("Freshwater fishes", isscaap_group) ~ "FW fishes",
+#                             grepl("Barramundi", species) ~ "FW fishes",
+#                              grepl("salmon|trout", species) ~ "Salmons and trouts",
+#                              grepl("Freshwater crustaceans", isscaap_group) ~ "FW crustaceans",
+#                              grepl("Marine fishes", species) ~ "Marine fishes ",
+#                              grepl("Finfishes", species) ~ "Marine fishes ",
+#                              grepl("marine crustaceans", species) ~ "Shrimps",
+#                              grepl("Shrimps", isscaap_group) ~ "Shrimps", 
+#                              grepl("eels", isscaap_group) ~ "Eels",
+#                              grepl("Miscellaneous freshwater fishes", isscaap_group) ~ "FW fishes", 
+#                           TRUE ~ isscaap_group)) %>% 
+#   select(-c("country", "fishing_area", "isscaap_group", "species", "fishing_area_code", "environment")) %>% 
+#   left_join(aqu_total_prod, by = "year") %>% 
+#   group_by(year, Taxa) %>% 
+#   reframe(production = sum(value), total_production) %>% 
+#   mutate(prop = production*100/total_production) %>% 
+#   unique() 
+#   
+#eFCR_prop %>% filter(Taxa == "FW fishes")
 
 display.brewer.pal(n = 5, name = "Blues")
 palette= c(brewer.pal(n=5, "Blues"), "#83CFC1", "#66C0CA")
   GNBlupal
 (eFCR_plot <- ggplot(prod_FCR %>% arrange(desc(eFCR))) + 
-  geom_line( aes(x = year, y = eFCR, color= Taxa), size = 1) + 
+  geom_line( aes(x = year, y = eFCR, color= Taxa), linewidth = 1) + 
   scale_color_manual(values =  palette) +                     #brewer.pal(n=2, "Blues"))+
     scale_x_continuous(limits = c(1994, 2012)) +
     theme_pubr()+
     theme(legend.position = "right",
           plot.title = element_text(hjust = 0.5, size = 15),
           text = element_text(size=12),
-          legend.text = element_text(size=9),
+          legend.text = element_text(size=10),
           legend.key.size = unit(0.7, "cm"))+
     labs(title = "eFCR", y= "eFCR through time",x = "Year", color="Taxa group"))#+
    # scale_y_continuous(labels = scales::comma)+
@@ -383,9 +384,67 @@ ggplot(FCR_prop_total, aes(x = year, y = prop)) +
 ```
 
 
+#Import Production to attach to the trophic levels
+```{r, trophic levels}
+
+aqu_production<- readRDS(here("data/tidy_data/aquaculture_production_tidy.rds")) 
+
+aqu_prod <- aqu_production |>
+  group_by(year, species, isscaap_group) |> 
+  reframe(value = sum(value, na.rm = TRUE)) |> 
+  arrange( -year, -value) |> 
+  filter(!species %in% c("Aquatic invertebrates nei", "Southern bluefin tuna", "Abalones nei")) |> 
+  filter(!isscaap_group %in% c("Oysters", "Mussels", "Miscellaneous marine molluscs", "Miscellaneous marine crustaceans", "Crabs, sea-spiders", "Scallops, pectens", "Tunas, bonitos, billfishes", "Miscellaneous aquatic invertebrates", "")) |> 
+  mutate(tl_group = case_when(isscaap_group == "Salmons, trouts, smelts" ~ "Salmons",
+                              isscaap_group == "Shrimps, prawns" ~ "Shrimps",
+                              isscaap_group %in% c("Miscellaneous freshwater fishes", "Miscellaneous diadromous fishes") ~ 
+                                "Other FW fishes",
+                              isscaap_group == "Marine fishes not identified" ~ "Marine fishes", 
+                              isscaap_group == "Freshwater crustaceans" ~ "FW crustaceans", 
+                              isscaap_group == "River eels" ~ "Eels", 
+                              TRUE ~ "NA"), 
+         tl_group = case_when(grepl("trout", species) ~ "Trouts", 
+                              TRUE ~ tl_group))
+  
+tr_levels <- data.frame(isscaap_group = c("Carps", "Catfishes", "Eels", "FW crustaceans", "Other FW fishes", "Marine fishes", "Milkfish", "Salmons", "Shrimps", "Tilapias", "Trouts"), 
+                        wild_tl = c(2.7, 3.5, 3.7, 2.45, 4.1, 4.05, 2.4, 4.4, 3.2, 2.25, 3.7), 
+                        farmed_tl_2015 = c(2.1, 2.2, 2.7, 2.25, 2.6, 2.4, 2.15, 2.4, 2.4, 2.1, 2.6))
+
+aqu_imports <- readRDS("~/Library/CloudStorage/OneDrive-TheUniversityofQueensland/Desktop/Git/australian_seafood/data/tidy_data/seafood_trade_volume_live_equivalent_by_partner_2019.rds") |> 
+  filter(!hs_name %in% c("Ornamental freshwater fish, live" ,"Ornamental fish, live, other")  & partner_country_name!= "Australia") |> 
+  group_by(partner_country_name, isscaap_name) |>
+  reframe(value =  sum(value_LE_med_cf))
+
+all_df <- aqu_prod |> 
+  rename(production_value = value) |>
+  left_join(tr_levels, by = c("tl_group" = "isscaap_group")) |> 
+  select(tl_group, farmed_tl_2015) |> 
+  distinct()
+
+blues <- colorRampPalette(c("#bdd7e7", "#2171b5", "darkblue"))(7)
+
+(t_levels_plot <- ggplot(all_df, aes(x = tl_group, y = farmed_tl_2015, color = tl_group)) + 
+  geom_point(size = 2) + 
+  theme_pubr()+
+  scale_color_manual(values = blues) +
+    theme(legend.position = "right",
+          plot.title = element_text(hjust = 0.5, size = 15),
+          text = element_text(size=12),
+          legend.text = element_text(size=10),
+          legend.key.size = unit(0.7, "cm"), 
+          axis.text.x = element_blank())+
+    labs(title = "Trophic levels of aquaculture \n species in Australia", y= "Mean effective trophic level (2015)", x = " Taxa group", color="Taxa group")+
+    scale_y_continuous(labels = scales::comma))
+
+```
+
+
 ```{r Join sustainability and production figures}
 
-(production + sust_stocks) / (fed_unfed_aqua + plot_spacer() + eFCR_plot) + plot_layout(nrow = 2)
+(production + fed_unfed_aqua) / ( t_levels_plot + sust_stocks + eFCR_plot) + 
+    plot_annotation(tag_levels = "a") + 
+  theme(plot.tag = element_text(size = 10), 
+        plot.margin = 9)
 
 
 #ggsave(filename = here("figures", "Australian Seafood Production (Draft Version!).jpg"), device="jpg", dpi = 600, width = 30, height=17, units = "cm")

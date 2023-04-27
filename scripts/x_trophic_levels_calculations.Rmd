@@ -1,0 +1,75 @@
+---
+title: "Plotting effective trophic levels for Aus aquaculture"
+author: "Rich Cottrell"
+date: "03/11/2022"
+output: html_document
+---
+
+
+```{r}
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(ggpubr)
+library(ggplot2)
+library(RColorBrewer)
+select <- dplyr::select
+
+```
+
+
+#Import Production to attach to the trophic levels
+```{r}
+
+aqu_production<- readRDS(here("data/tidy_data/aquaculture_production_tidy.rds")) 
+
+aqu_prod <- aqu_production |>
+  group_by(year, species, isscaap_group) |> 
+  reframe(value = sum(value, na.rm = TRUE)) |> 
+  arrange( -year, -value) |> 
+  filter(!species %in% c("Aquatic invertebrates nei", "Southern bluefin tuna", "Abalones nei")) |> 
+  filter(!isscaap_group %in% c("Oysters", "Mussels", "Miscellaneous marine molluscs", "Miscellaneous marine crustaceans", "Crabs, sea-spiders", "Scallops, pectens", "Tunas, bonitos, billfishes", "Miscellaneous aquatic invertebrates", "")) |> 
+  mutate(tl_group = case_when(isscaap_group == "Salmons, trouts, smelts" ~ "Salmons",
+                              isscaap_group == "Shrimps, prawns" ~ "Shrimps",
+                              isscaap_group %in% c("Miscellaneous freshwater fishes", "Miscellaneous diadromous fishes") ~ 
+                                "Other FW fishes",
+                              isscaap_group == "Marine fishes not identified" ~ "Marine fishes", 
+                              isscaap_group == "Freshwater crustaceans" ~ "FW crustaceans", 
+                              isscaap_group == "River eels" ~ "Eels", 
+                              TRUE ~ "NA"), 
+         tl_group = case_when(grepl("trout", species) ~ "Trouts", 
+                              TRUE ~ tl_group))
+  
+tr_levels <- data.frame(isscaap_group = c("Carps", "Catfishes", "Eels", "FW crustaceans", "Other FW fishes", "Marine fishes", "Milkfish", "Salmons", "Shrimps", "Tilapias", "Trouts"), 
+                        wild_tl = c(2.7, 3.5, 3.7, 2.45, 4.1, 4.05, 2.4, 4.4, 3.2, 2.25, 3.7), 
+                        farmed_tl_2015 = c(2.1, 2.2, 2.7, 2.25, 2.6, 2.4, 2.15, 2.4, 2.4, 2.1, 2.6))
+
+aqu_imports <- readRDS("~/Library/CloudStorage/OneDrive-TheUniversityofQueensland/Desktop/Git/australian_seafood/data/tidy_data/seafood_trade_volume_live_equivalent_by_partner_2019.rds") |> 
+  filter(!hs_name %in% c("Ornamental freshwater fish, live" ,"Ornamental fish, live, other")  & partner_country_name!= "Australia") |> 
+  group_by(partner_country_name, isscaap_name) |>
+  reframe(value =  sum(value_LE_med_cf))
+
+all_df <- aqu_prod |> 
+  rename(production_value = value) |>
+  left_join(tr_levels, by = c("tl_group" = "isscaap_group")) |> 
+  select(tl_group, farmed_tl_2015) |> 
+  distinct()
+
+blues <- colorRampPalette(c("#bdd7e7", "#2171b5", "darkblue"))(7)
+
+t_levels_plot <- ggplot(all_df, aes(x = tl_group, y = farmed_tl_2015, color = tl_group)) + 
+  geom_point() + 
+  theme_pubr()+
+  scale_color_manual(values = blues) +
+    theme(legend.position = "none",
+          plot.title = element_text(hjust = 0.5, size = 15),
+          text = element_text(size=15),
+          legend.text = element_text(size=15),
+          legend.key.size = unit(0.7, "cm"))+
+    labs(title = "Trophic levels of aquaculture species in Australia", y= "Mean effective trophic level (2015)", x = " Taxa group")+
+    scale_y_continuous(labels = scales::comma)
+
+
+```
+
